@@ -7,9 +7,11 @@ import { Slider } from './components/ui/slider';
 import { Alert } from './components/ui/alert';
 import { Button } from './components/ui/button';
 import { useTheme } from './components/ThemeProvider';
+import { useAuth } from './contexts/AuthContext';
+import LoginPage from './components/LoginPage';
 import { 
   Zap, Activity, Thermometer, Home, Gauge, 
-  Sun, Moon, AlertCircle, TrendingUp, Clock 
+  Sun, Moon, AlertCircle, TrendingUp, Clock, LogOut
 } from 'lucide-react';
 
 // Datos de las viviendas (corregidos según el PDF)
@@ -107,8 +109,8 @@ const viviendasData = [
   }
 ];
 
-// Datos para la curva de demanda diaria
-const demandaDiaria = [
+// Curva de demanda base (Casa 1, 14 kWh/día de referencia)
+const demandaBase = [
   { hora: '01:00', kw: 0.8 },
   { hora: '02:00', kw: 0.6 },
   { hora: '03:00', kw: 0.5 },
@@ -135,16 +137,35 @@ const demandaDiaria = [
   { hora: '00:00', kw: 1.0 }
 ];
 
+const BASE_DIARIO = 14; // kWh/día de referencia (Casa 1)
+
+// Escala la curva proporcionalmente al consumo diario de la casa
+function getDemandaCasa(casaDiario) {
+  const factor = casaDiario / BASE_DIARIO;
+  return demandaBase.map(p => ({
+    hora: p.hora,
+    kw: parseFloat((p.kw * factor).toFixed(2))
+  }));
+}
+
 function App() {
   const { theme, toggleTheme } = useTheme();
+  const { currentUser, logout } = useAuth();
   const [simuladorCarga, setSimuladorCarga] = useState(48);
   const [corrienteSimulada, setCorrienteSimulada] = useState(123);
   const [, setActiveTab] = useState('tabla');
   
   const R_LINEA = 0.5;
+
+  // Si no hay usuario autenticado, mostrar login
+  if (!currentUser) {
+    return <LoginPage />;
+  }
+
+  // Datos de la casa autenticada
+  const casa = viviendasData.find(v => v.id === currentUser.casaId);
+  const demandaDiaria = getDemandaCasa(casa.diario);
   const efectoJouleSimulado = Math.pow(corrienteSimulada, 2) * R_LINEA / 1000;
-  const consumoTotal = viviendasData.reduce((sum, casa) => sum + casa.mensual, 0);
-  const potenciaPicoTotal = viviendasData.reduce((sum, casa) => sum + casa.pPico, 0);
 
   return (
     <div className="App">
@@ -173,6 +194,14 @@ function App() {
           </div>
           
           <div className="flex items-center gap-4">
+            {/* Indicador de casa autenticada */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 rounded-full dark:bg-blue-900" style={{ borderRadius: '9999px' }}>
+              <Home className="w-4 h-4 text-blue-600 dark:text-blue-300" />
+              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                Casa {casa.id}
+              </span>
+            </div>
+
             <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 rounded-full dark:bg-green-900">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               <span className="text-sm font-medium text-green-700 dark:text-green-300">
@@ -188,6 +217,12 @@ function App() {
             >
               {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
             </Button>
+
+            {/* Botón de Logout */}
+            <button className="logout-btn" onClick={logout} title="Cerrar sesión">
+              <LogOut size={15} />
+              Salir
+            </button>
           </div>
         </div>
       </header>
@@ -203,9 +238,9 @@ function App() {
                 <Activity className="w-6 h-6 text-blue-600 dark:text-blue-300" />
               </div>
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Consumo Total</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Consumo Mensual</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {consumoTotal.toLocaleString()} kWh
+                  {casa.mensual.toLocaleString()} kWh
                 </p>
                 <p className="text-xs text-gray-500">Últimos 30 días</p>
               </div>
@@ -220,9 +255,9 @@ function App() {
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Potencia Pico</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {potenciaPicoTotal.toFixed(1)} kW
+                  {casa.pPico.toFixed(1)} kW
                 </p>
-                <p className="text-xs text-gray-500">Máxima del sistema</p>
+                <p className="text-xs text-gray-500">Máxima registrada</p>
               </div>
             </CardContent>
           </Card>
@@ -248,11 +283,11 @@ function App() {
                 <Home className="w-6 h-6 text-purple-600 dark:text-purple-300" />
               </div>
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Viviendas</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Mi Vivienda</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {viviendasData.length}
+                  Casa {casa.id}
                 </p>
-                <p className="text-xs text-gray-500">Monitorizadas</p>
+                <p className="text-xs text-gray-500">{casa.diario} kWh/día</p>
               </div>
             </CardContent>
           </Card>
@@ -269,9 +304,9 @@ function App() {
           <TabsContent value="tabla">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Datos detallados de consumo eléctrico y efecto Joule</CardTitle>
+                <CardTitle className="text-lg">Datos detallados de consumo eléctrico y efecto Joule — Casa {casa.id}</CardTitle>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Resumen de consumo por vivienda - Actualizado: {new Date().toLocaleDateString()}
+                  Actualizado: {new Date().toLocaleDateString()}
                 </p>
               </CardHeader>
               <CardContent>
@@ -293,21 +328,19 @@ function App() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {viviendasData.map((casa) => (
-                        <TableRow key={casa.id}>
-                          <TableCell className="font-medium">Casa {casa.id}</TableCell>
-                          <TableCell>{casa.mensual}</TableCell>
-                          <TableCell>{casa.diario}</TableCell>
-                          <TableCell>{casa.lProm}</TableCell>
-                          <TableCell>{casa.lPico}</TableCell>
-                          <TableCell>{casa.pProm}</TableCell>
-                          <TableCell>{casa.pPico}</TableCell>
-                          <TableCell>{casa.rProm}</TableCell>
-                          <TableCell>{casa.rPico}</TableCell>
-                          <TableCell>{casa.jouleProm}</TableCell>
-                          <TableCell>{casa.joulePico}</TableCell>
-                        </TableRow>
-                      ))}
+                      <TableRow>
+                        <TableCell className="font-medium">Casa {casa.id}</TableCell>
+                        <TableCell>{casa.mensual}</TableCell>
+                        <TableCell>{casa.diario}</TableCell>
+                        <TableCell>{casa.lProm}</TableCell>
+                        <TableCell>{casa.lPico}</TableCell>
+                        <TableCell>{casa.pProm}</TableCell>
+                        <TableCell>{casa.pPico}</TableCell>
+                        <TableCell>{casa.rProm}</TableCell>
+                        <TableCell>{casa.rPico}</TableCell>
+                        <TableCell>{casa.jouleProm}</TableCell>
+                        <TableCell>{casa.joulePico}</TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </div>
@@ -317,24 +350,22 @@ function App() {
 
           <TabsContent value="graficas">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Potencia vs Corriente */}
+              {/* Potencia Promedio vs Pico */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <TrendingUp className="w-5 h-5" />
-                    Potencia vs Corriente
+                    Potencia: Promedio vs Pico
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <BarChartComponent
-                    data={viviendasData.map(c => ({
-                      name: `Casa ${c.id}`,
-                      Promedio: c.pProm,
-                      Pico: c.pPico
-                    }))}
+                    data={[
+                      { name: 'Potencia Promedio', valor: casa.pProm },
+                      { name: 'Potencia Pico', valor: casa.pPico }
+                    ]}
                     bars={[
-                      { dataKey: 'Promedio', name: 'Potencia Promedio', color: '#3b82f6' },
-                      { dataKey: 'Pico', name: 'Potencia Pico', color: '#ef4444' }
+                      { dataKey: 'valor', name: 'kW', color: '#3b82f6' }
                     ]}
                     xAxisKey="name"
                     height={300}
@@ -342,34 +373,28 @@ function App() {
                   <div className="flex justify-center gap-6 mt-4 text-sm">
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                      <span>Promedio</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-red-500 rounded"></div>
-                      <span>Pico</span>
+                      <span>kW</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Efecto Joule por Casa */}
+              {/* Efecto Joule */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Thermometer className="w-5 h-5" />
-                    Efecto Joule por Casa (kW)
+                    Efecto Joule (kW)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <BarChartComponent
-                    data={viviendasData.map(c => ({
-                      name: `Casa ${c.id}`,
-                      Promedio: c.jouleProm,
-                      Pico: c.joulePico
-                    }))}
+                    data={[
+                      { name: 'Joule Promedio', valor: casa.jouleProm },
+                      { name: 'Joule Pico', valor: casa.joulePico }
+                    ]}
                     bars={[
-                      { dataKey: 'Promedio', name: 'Joule Promedio', color: '#3b82f6' },
-                      { dataKey: 'Pico', name: 'Joule Pico', color: '#ef4444' }
+                      { dataKey: 'valor', name: 'kW', color: '#ef4444' }
                     ]}
                     xAxisKey="name"
                     height={300}
@@ -377,22 +402,22 @@ function App() {
                 </CardContent>
               </Card>
 
-              {/* Consumo Mensual */}
+              {/* Corriente Promedio vs Pico */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Zap className="w-5 h-5" />
-                    Consumo Mensual por Vivienda (kWh)
+                    Corriente: Promedio vs Pico (A)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <BarChartComponent
-                    data={viviendasData.map(c => ({
-                      name: `Casa ${c.id}`,
-                      consumo: c.mensual
-                    }))}
+                    data={[
+                      { name: 'Corriente Promedio', valor: casa.lProm },
+                      { name: 'Corriente Pico', valor: casa.lPico }
+                    ]}
                     bars={[
-                      { dataKey: 'consumo', name: 'Consumo Mensual', color: '#3b82f6' }
+                      { dataKey: 'valor', name: 'Amperes', color: '#f59e0b' }
                     ]}
                     xAxisKey="name"
                     height={300}
@@ -405,7 +430,7 @@ function App() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Clock className="w-5 h-5" />
-                    Curva de Demanda Diaria (kW)
+                    Curva de Demanda Diaria — Casa {casa.id} (kW)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -425,7 +450,7 @@ function App() {
           <TabsContent value="simulador">
             <Card>
               <CardHeader>
-                <CardTitle>Simulador y Alertas (Tiempo Real)</CardTitle>
+                <CardTitle>Simulador y Alertas (Tiempo Real) — Casa {casa.id}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -535,6 +560,10 @@ function App() {
                         <span className="text-sm">Resistencia línea:</span>
                         <span className="font-medium">{R_LINEA} Ω</span>
                       </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Corriente pico de la casa:</span>
+                        <span className="font-medium">{casa.lPico} A</span>
+                      </div>
                       
                       {corrienteSimulada > 200 && (
                         <Alert variant="warning" className="mt-4">
@@ -557,7 +586,7 @@ function App() {
 
       <footer className="border-t border-gray-200 dark:border-gray-700 mt-8 py-4">
         <div className="container mx-auto px-4 text-center text-sm text-gray-600 dark:text-gray-400">
-          WATIOS - Sistema de Monitoreo Eléctrico v1.0 | Datos actualizados en tiempo real
+          WATIOS — Casa {casa.id} | Sistema de Monitoreo Eléctrico v1.0 | Datos actualizados en tiempo real
         </div>
       </footer>
     </div>
