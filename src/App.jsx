@@ -150,13 +150,21 @@ function App() {
     <div className="App">
       <header className="bg-white shadow-sm dark:bg-gray-800 p-4">
         <div className="container mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-100 p-2 rounded-lg dark:bg-blue-900">
-              <Zap className="w-6 h-6 text-blue-600 dark:text-blue-300" />
-            </div>
+          <div className="flex items-center gap-4">
+            {/* Logo imagen de WATIOS - tamaño h-10 (40px) */}
+            <img 
+              src="/WALTIOS.jpg" 
+              alt="WATIOS Logo" 
+              className="h-10 w-auto object-contain"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = 'https://via.placeholder.com/40x40?text=W';
+              }}
+            />
+            
             <div>
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                Monitor Eléctrico WATIOS
+                Sistema de Alertas
               </h1>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Sistema de monitoreo de consumo y efecto Joule
@@ -183,6 +191,8 @@ function App() {
           </div>
         </div>
       </header>
+
+
 
       <main className="container mx-auto py-6 px-4">
         {/* Tarjetas de KPIs */}
